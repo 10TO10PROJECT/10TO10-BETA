@@ -81,7 +81,29 @@ export function buildErrorMessage(
   );
 }
 
+// React StrictMode 등에서 동일 태그로 세션 생성이 겹치면 Solar 호출이 중복된다.
+let inflightCreateSession:
+  | { key: string; promise: Promise<CreateSessionResponse> }
+  | null = null;
+
 export async function createChatSession(
+  profileTags: string[],
+): Promise<CreateSessionResponse> {
+  const key = profileTags.join("\0");
+  if (inflightCreateSession?.key === key) {
+    return inflightCreateSession.promise;
+  }
+
+  const promise = invokeCreateChatSession(profileTags).finally(() => {
+    if (inflightCreateSession?.promise === promise) {
+      inflightCreateSession = null;
+    }
+  });
+  inflightCreateSession = { key, promise };
+  return promise;
+}
+
+async function invokeCreateChatSession(
   profileTags: string[],
 ): Promise<CreateSessionResponse> {
   const { data, error } = await supabase.functions.invoke("chat-session", {
@@ -89,7 +111,14 @@ export async function createChatSession(
   });
 
   if (error) {
-    throw await toApiError(error);
+    throw await toApiError(error, data);
+  }
+
+  if (data && typeof data === "object" && "error" in data && !("session_id" in data)) {
+    throw new AgentChatApiError(
+      mapServerError(500, String((data as { error: unknown }).error)),
+      String((data as { error: unknown }).error),
+    );
   }
 
   return data as CreateSessionResponse;
@@ -111,13 +140,16 @@ export async function sendChatMessage(
   });
 
   if (error) {
-    throw await toApiError(error);
+    throw await toApiError(error, data);
   }
 
   return data as SendMessageResponse;
 }
 
-async function toApiError(error: unknown): Promise<AgentChatApiError> {
+async function toApiError(
+  error: unknown,
+  data?: unknown,
+): Promise<AgentChatApiError> {
   if (error instanceof FunctionsHttpError) {
     const status = error.context.status;
     let serverError = "";
@@ -128,7 +160,10 @@ async function toApiError(error: unknown): Promise<AgentChatApiError> {
         serverError = payload.error;
       }
     } catch {
-      // ignore JSON parse failure
+      // body가 이미 읽혔거나 JSON이 아니면 data 폴백
+      if (data && typeof data === "object" && data !== null && "error" in data) {
+        serverError = String((data as { error: unknown }).error);
+      }
     }
 
     const code = mapServerError(status, serverError);
@@ -144,13 +179,22 @@ function mapServerError(
   status: number,
   serverError: string,
 ): AgentChatApiError["code"] {
-  if (status === 401) return "AUTH_REQUIRED";
+  if (
+    status === 401 ||
+    serverError === "Unauthorized" ||
+    serverError === "Invalid token" ||
+    serverError === "AUTH_REQUIRED"
+  ) {
+    return "AUTH_REQUIRED";
+  }
   if (status === 410 && serverError === "SESSION_EXPIRED") return "SESSION_EXPIRED";
   if (status === 429 && serverError === "BUDGET_EXCEEDED") return "BUDGET_EXCEEDED";
   if (status === 429 && serverError === "SESSION_LIMIT") return "SESSION_LIMIT";
   if (status === 429 && serverError === "RATE_LIMIT") return "RATE_LIMIT";
   if (status === 504 && serverError === "SOLAR_TIMEOUT") return "SOLAR_TIMEOUT";
+  if (serverError === "SOLAR_TIMEOUT") return "SOLAR_TIMEOUT";
   if (status === 502 && serverError.startsWith("SOLAR_")) return "SOLAR_5XX";
+  if (serverError.startsWith("SOLAR_")) return "SOLAR_5XX";
   if (status === 502 && serverError.startsWith("INVALID_CONTENT_BLOCKS")) {
     return "SOLAR_5XX";
   }

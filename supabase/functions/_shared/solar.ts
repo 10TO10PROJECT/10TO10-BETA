@@ -182,7 +182,8 @@ export async function callSolar(
   if (!apiKey) throw new Error("UPSTAGE_API_KEY not set");
 
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs ?? 8000;
+  // json_schema 구조화 출력은 8초 안에 자주 못 끝나 504 SOLAR_TIMEOUT이 난다.
+  const timeoutMs = options.timeoutMs ?? 20_000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const body: Record<string, unknown> = {
     model: SOLAR_MODEL,

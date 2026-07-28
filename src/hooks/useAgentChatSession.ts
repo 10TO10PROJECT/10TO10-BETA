@@ -114,6 +114,8 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
     [handleAuthRequired, sessionId],
   );
 
+  const profileTagsKey = profileTags.join("\0");
+
   const bootstrapSession = useCallback(async () => {
     requestGenRef.current += 1;
     const generation = requestGenRef.current;
@@ -186,15 +188,22 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
       toast.error("AI 추천을 시작하지 못했어요. 잠시 후 다시 시도해주세요.");
       setPhase("active");
     }
-  }, [applyApiError, handleAuthRequired, profileTags]);
+    // profileTagsKey로 내용 비교 — 배열 참조 변경만으로 재생성되지 않게 함
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- profileTags read via profileTagsKey
+  }, [handleAuthRequired, profileTagsKey]);
 
+  // 마운트·프로필 태그 변경 시에만 세션 생성.
+  // bootstrapSession을 dep에 넣으면 sessionId 갱신 → applyApiError 재생성 루프로
+  // 분당 세션 생성 한도(5회)에 걸려 429 RATE_LIMIT가 난다.
   useEffect(() => {
     mountedRef.current = true;
-    bootstrapSession();
+    void bootstrapSession();
     return () => {
       mountedRef.current = false;
+      requestGenRef.current += 1;
     };
-  }, [bootstrapSession]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: profileTagsKey only
+  }, [profileTagsKey]);
 
   useEffect(() => {
     if (!showSessionWarnValue(turnsRemaining, userTurnCount)) return;
@@ -307,8 +316,17 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
   );
 
   const retryLastTurn = useCallback(() => {
+    if (retryCount >= MAX_RETRY_COUNT) return;
+
+    // 부트스트랩(세션 생성) 실패 — pending 없이 재시작
+    if (!sessionId && !pendingRef.current) {
+      setRetryCount((c) => c + 1);
+      void bootstrapSession();
+      return;
+    }
+
     const pending = pendingRef.current;
-    if (!pending || retryCount >= MAX_RETRY_COUNT) return;
+    if (!pending) return;
 
     setRetryCount((c) => c + 1);
     setPhase("typing");
@@ -320,7 +338,7 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
     });
 
     void processAssistantResponse({ ...pending, isRetry: true });
-  }, [retryCount, processAssistantResponse]);
+  }, [retryCount, sessionId, bootstrapSession, processAssistantResponse]);
 
   const resetSession = useCallback(() => {
     void bootstrapSession();

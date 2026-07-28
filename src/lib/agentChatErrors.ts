@@ -10,7 +10,7 @@ export const ERROR_MESSAGES: Record<
   },
   SOLAR_TIMEOUT: {
     title: "⚠ 응답 시간이 초과됐어요",
-    body: "AI 응답이 8초를 넘겼어요. 네트워크 상태를 확인하고 다시 시도해주세요.",
+    body: "AI 응답이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.",
   },
   RATE_LIMIT: {
     title: "⚠ 요청이 많아요",
