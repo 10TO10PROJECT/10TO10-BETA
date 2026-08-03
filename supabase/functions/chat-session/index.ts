@@ -9,6 +9,7 @@ import {
   BOOTSTRAP_PROMPT,
   calcCostKrw,
   callSolar,
+  createColdStartBlocks,
   createNoMatchBlocks,
   extractQueryArgs,
   parseContentBlocksWithOptions,
@@ -36,12 +37,26 @@ const handler = async (req: Request): Promise<Response> => {
     const { data: { user }, error: authError } = await supa.auth.getUser(jwt);
     if (authError || !user) return errResp(401, "Invalid token");
 
-    // Body 파싱
-    const { profile_tags } = await req.json();
-    if (!isValidProfileTags(profile_tags)) {
-      return errResp(400, "profile_tags required");
+    // Body 파싱 — profile_tags 생략/빈 배열/cold_start 플래그로 콜드 스타트 허용
+    const body = await req.json().catch(() => ({}));
+    const coldStartFlag =
+      body?.cold_start === true || body?.surface === "agent_home";
+    const rawTags = body?.profile_tags;
+
+    let profileTags: string[] = [];
+    if (rawTags === undefined || rawTags === null) {
+      profileTags = [];
+    } else if (Array.isArray(rawTags)) {
+      profileTags = rawTags
+        .filter((tag: unknown) => typeof tag === "string")
+        .map((tag: string) => tag.trim())
+        .filter((tag: string) => tag.length > 0 && tag.length <= 100)
+        .slice(0, 30);
+    } else if (!coldStartFlag) {
+      return errResp(400, "profile_tags must be an array of strings");
     }
-    const profileTags = profile_tags.map((tag: string) => tag.trim());
+
+    const isColdStart = coldStartFlag || profileTags.length === 0;
 
     const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
     const { data: recentSessions, error: recentErr } = await supa
@@ -84,7 +99,7 @@ const handler = async (req: Request): Promise<Response> => {
         user_id: user.id,
         role,
         profile_tags: profileTags,
-        surface: "preference_result",
+        surface: isColdStart ? "agent_home" : "preference_result",
       })
       .select()
       .single();
@@ -92,10 +107,6 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("chat_sessions insert error:", sessErr?.message);
       return errResp(500, "Failed to create session");
     }
-
-    // 학원 DB 조회
-    const queryArgs = extractQueryArgs(profileTags);
-    const academies = await queryAcademies(supa, queryArgs);
 
     let content_blocks = createNoMatchBlocks();
     let model_meta = {
@@ -106,42 +117,50 @@ const handler = async (req: Request): Promise<Response> => {
       cost_krw: 0,
     };
 
-    if (academies.length > 0) {
-      const allowedAcademyIds = new Set(
-        academies.map((academy: any) => String(academy.id)),
-      );
+    if (isColdStart) {
+      // 콜드 스타트: Solar 없이 환영 메시지 + 숏컷 칩만
+      content_blocks = createColdStartBlocks();
+    } else {
+      // 학원 DB 조회 후 Solar 맞춤 추천
+      const queryArgs = extractQueryArgs(profileTags);
+      const academies = await queryAcademies(supa, queryArgs);
 
-      // Solar 호출
-      const messages: SolarMessage[] = [
-        { role: "system", content: BOOTSTRAP_PROMPT },
-        {
-          role: "user",
-          content: `사용자 학습 선호도 태그: ${profileTags.join(", ")}
+      if (academies.length > 0) {
+        const allowedAcademyIds = new Set(
+          academies.map((academy: any) => String(academy.id)),
+        );
+
+        const messages: SolarMessage[] = [
+          { role: "system", content: BOOTSTRAP_PROMPT },
+          {
+            role: "user",
+            content: `사용자 학습 선호도 태그: ${profileTags.join(", ")}
 
 추천 가능한 학원 목록 (이 목록에서만 선택):
 ${academyListToContext(academies)}
 
 위 정보를 바탕으로 맞춤 추천 메시지를 content_blocks JSON으로 작성해주세요.`,
-        },
-      ];
+          },
+        ];
 
-      const t0 = Date.now();
-      const solarRes = await callSolar(messages, {
-        promptCacheKey: `chat-session:${session.id}`,
-      });
-      const latencyMs = Date.now() - t0;
+        const t0 = Date.now();
+        const solarRes = await callSolar(messages, {
+          promptCacheKey: `chat-session:${session.id}`,
+        });
+        const latencyMs = Date.now() - t0;
 
-      content_blocks = parseContentBlocksWithOptions(solarRes.text, {
-        allowedAcademyIds,
-      });
-      const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
-      model_meta = {
-        provider: "upstage",
-        model: SOLAR_MODEL,
-        latency_ms: latencyMs,
-        tokens: solarRes.usage,
-        cost_krw: cost,
-      };
+        content_blocks = parseContentBlocksWithOptions(solarRes.text, {
+          allowedAcademyIds,
+        });
+        const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
+        model_meta = {
+          provider: "upstage",
+          model: SOLAR_MODEL,
+          latency_ms: latencyMs,
+          tokens: solarRes.usage,
+          cost_krw: cost,
+        };
+      }
     }
 
     // assistant turn 저장 + 세션 업데이트 (병렬)
@@ -170,6 +189,7 @@ ${academyListToContext(academies)}
 
     return ok({
       session_id: session.id,
+      parser_version: "v3",
       first_turn: {
         session_id: session.id,
         turn_index: 1,
@@ -190,14 +210,6 @@ ${academyListToContext(academies)}
     return errResp(500, msg);
   }
 };
-
-function isValidProfileTags(value: unknown): value is string[] {
-  return Array.isArray(value) &&
-    value.length > 0 &&
-    value.length <= 30 &&
-    value.every((tag) => typeof tag === "string" && tag.trim().length > 0 &&
-      tag.trim().length <= 100);
-}
 
 function ok(body: object): Response {
   return new Response(JSON.stringify(body), {

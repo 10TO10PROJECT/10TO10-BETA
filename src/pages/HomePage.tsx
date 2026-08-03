@@ -4,6 +4,7 @@ import { useRegion, REGION_ALL } from "@/contexts/RegionContext";
 import BottomNavigation from "@/components/BottomNavigation";
 import Logo from "@/components/Logo";
 import QuickActionMenu from "@/components/QuickActionMenu";
+import AgentHeroCard from "@/components/AgentHeroCard";
 
 import GlobalRegionSelector from "@/components/GlobalRegionSelector";
 import SeminarCarousel from "@/components/SeminarCarousel";
@@ -224,11 +225,12 @@ const HomePage = () => {
         </section>
 
 
-        {/* Greeting & Quick Action Menu */}
+        {/* Greeting & Agent Hero & Quick Action Menu */}
         <section className="mb-6 bg-primary/10 mx-4 rounded-xl p-4">
           <h2 className="text-lg font-semibold text-foreground mb-3">
             {userName || "학부모"}님 안녕하세요!
           </h2>
+          <AgentHeroCard role="parent" />
           <QuickActionMenu />
         </section>
 

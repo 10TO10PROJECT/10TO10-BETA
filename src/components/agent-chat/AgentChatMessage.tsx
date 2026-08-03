@@ -59,6 +59,7 @@ export function AgentChatMessage({
           {message.error && onRetry && onReset ? (
             <AgentErrorCard
               code={message.error}
+              detail={message.errorDetail}
               onRetry={onRetry}
               onReset={onReset}
               retryDisabled={retryDisabled}

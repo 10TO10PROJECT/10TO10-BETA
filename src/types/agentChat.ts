@@ -57,6 +57,8 @@ export interface AgentMessage {
   turn_index?: number;
   session_meta?: string;
   error?: AgentErrorCode;
+  /** 서버가 돌려준 원문 에러 (디버그/정확한 안내) */
+  errorDetail?: string;
 }
 
 export type AgentPhase = "loading" | "typing" | "active" | "session_limit";

@@ -33,7 +33,7 @@ export function ProfileTagStrip({ profileTags }: ProfileTagStripProps) {
 
 function buildStripChips(profileTags: string[]): string[] {
   if (profileTags.length === 0) {
-    return ["중2", "수학·영어", "성적향상", "~월 50만원"];
+    return [];
   }
 
   const byCategory: Record<string, string[]> = {};

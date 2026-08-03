@@ -4,6 +4,7 @@ import { ERROR_MESSAGES } from "@/lib/agentChatErrors";
 
 interface AgentErrorCardProps {
   code: AgentErrorCode;
+  detail?: string;
   onRetry: () => void;
   onReset: () => void;
   retryDisabled?: boolean;
@@ -13,6 +14,7 @@ interface AgentErrorCardProps {
 
 export function AgentErrorCard({
   code,
+  detail,
   onRetry,
   onReset,
   retryDisabled,
@@ -20,11 +22,18 @@ export function AgentErrorCard({
   maxRetriesReached,
 }: AgentErrorCardProps) {
   const { title, body } = ERROR_MESSAGES[code];
+  const detailText =
+    detail && detail !== code && !body.includes(detail) ? detail : undefined;
 
   return (
     <div className="max-w-[270px] bg-card rounded-2xl rounded-tl-sm p-3.5 border-l-[3px] border-destructive">
       <p className="text-[13.5px] font-bold text-destructive mb-1.5">{title}</p>
       <p className="text-[12.5px] leading-relaxed text-muted-foreground mb-2.5">{body}</p>
+      {detailText && (
+        <p className="text-[11px] leading-relaxed text-muted-foreground/80 mb-2.5 break-all font-mono">
+          {detailText}
+        </p>
+      )}
       <div className="flex gap-1.5">
         {!maxRetriesReached && (
           <Button
