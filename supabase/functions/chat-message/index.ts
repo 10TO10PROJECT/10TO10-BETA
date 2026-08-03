@@ -101,6 +101,7 @@ const handler = async (req: Request): Promise<Response> => {
     let allowedAcademyIds = new Set<string>();
     const shouldRequery = isFilterPayload(payload) ||
       isRelaxPayload(payload) ||
+      isAcademyActionPayload(payload) ||
       needsAcademyRequery(userText);
     if (shouldRequery && remainingAcademyCards > 0) {
       const args = extractQueryArgs([
@@ -253,6 +254,10 @@ function isRelaxPayload(payload: unknown): boolean {
   return typeof payload === "string" && payload.startsWith("relax:");
 }
 
+function isAcademyActionPayload(payload: unknown): boolean {
+  return payload === "action:recommend_academies";
+}
+
 // 재조회가 필요한 키워드 체크
 function needsAcademyRequery(text: string): boolean {
   const triggers = [
@@ -265,6 +270,10 @@ function needsAcademyRequery(text: string): boolean {
     "근처",
     "재추천",
     "다시",
+    "추천",
+    "학원",
+    "찾아",
+    "알려줘",
   ];
   return triggers.some((t) => text.includes(t));
 }

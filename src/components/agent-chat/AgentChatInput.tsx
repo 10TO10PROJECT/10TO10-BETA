@@ -7,9 +7,15 @@ interface AgentChatInputProps {
   placeholder: string;
   disabled: boolean;
   onSend: (text: string) => void;
+  autoFocus?: boolean;
 }
 
-export function AgentChatInput({ placeholder, disabled, onSend }: AgentChatInputProps) {
+export function AgentChatInput({
+  placeholder,
+  disabled,
+  onSend,
+  autoFocus = false,
+}: AgentChatInputProps) {
   const [value, setValue] = useState("");
 
   const handleSend = () => {
@@ -36,6 +42,7 @@ export function AgentChatInput({ placeholder, disabled, onSend }: AgentChatInput
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
+          autoFocus={autoFocus}
           className={cn(
             "flex-1 h-[42px] rounded-full bg-muted border-transparent text-[13px]",
             value && "bg-card border-primary border-[1.5px]",

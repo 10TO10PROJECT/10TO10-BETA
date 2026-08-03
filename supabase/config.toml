@@ -29,3 +29,13 @@ entrypoint = "./functions/send-seminar-reminders/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/retry-notification/index.ts"
+
+[functions.chat-session]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/chat-session/index.ts"
+
+[functions.chat-message]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/chat-message/index.ts"

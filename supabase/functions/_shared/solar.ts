@@ -88,88 +88,9 @@ export const BOOTSTRAP_PROMPT = `당신은 에듀플로 AI 학원 매칭 어시�
 {"content_blocks":[{"type":"text","text":"..."},{"type":"academy_cards","items":[{"id":"...","name":"...","match_score":90,"thumbnail":"📐","reason_tags":["소수정예"],"price_monthly":450000}]},{"type":"quick_replies","items":[{"label":"수학만 보기","payload":"filter:subject=math"}]}]}`;
 
 const CONTENT_BLOCKS_RESPONSE_FORMAT = {
-  type: "json_schema",
-  json_schema: {
-    name: "eduflo_chat_content_blocks",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        content_blocks: {
-          type: "array",
-          items: {
-            anyOf: [
-              {
-                type: "object",
-                properties: {
-                  type: { type: "string", enum: ["text"] },
-                  text: { type: "string" },
-                },
-                required: ["type", "text"],
-                additionalProperties: false,
-              },
-              {
-                type: "object",
-                properties: {
-                  type: { type: "string", enum: ["academy_cards"] },
-                  items: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        id: { type: "string" },
-                        name: { type: "string" },
-                        match_score: { type: "number" },
-                        thumbnail: { type: "string" },
-                        reason_tags: {
-                          type: "array",
-                          items: { type: "string" },
-                        },
-                        price_monthly: { type: "number" },
-                      },
-                      required: [
-                        "id",
-                        "name",
-                        "match_score",
-                        "thumbnail",
-                        "reason_tags",
-                        "price_monthly",
-                      ],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["type", "items"],
-                additionalProperties: false,
-              },
-              {
-                type: "object",
-                properties: {
-                  type: { type: "string", enum: ["quick_replies"] },
-                  items: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        label: { type: "string" },
-                        payload: { type: "string" },
-                      },
-                      required: ["label", "payload"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["type", "items"],
-                additionalProperties: false,
-              },
-            ],
-          },
-        },
-      },
-      required: ["content_blocks"],
-      additionalProperties: false,
-    },
-  },
+  // json_schema는 일부 응답에서 content가 object로 와 JSON.parse가 깨진다.
+  // json_object는 content가 JSON 문자열로 오는 경우가 많아 파싱이 안정적이다.
+  type: "json_object",
 };
 
 // ─── Solar API ───────────────────────────────────────────────────
@@ -210,8 +131,12 @@ export async function callSolar(
     }
 
     const json = await res.json();
+    const message = json.choices?.[0]?.message ?? {};
+    // provider에 따라 content / parsed 중 하나에 실릴 수 있음
+    const rawContent = message.content ?? message.parsed ?? null;
+    const text = normalizeSolarContent(rawContent);
     return {
-      text: json.choices?.[0]?.message?.content ?? "",
+      text,
       usage: {
         input: json.usage?.prompt_tokens ?? 0,
         output: json.usage?.completion_tokens ?? 0,
@@ -220,6 +145,36 @@ export async function callSolar(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Solar content → 항상 JSON 문자열로 정규화 (object면 stringify) */
+function normalizeSolarContent(content: unknown): string {
+  if (typeof content === "string") {
+    // 이미 잘못된 coerce가 된 경우 조기 실패 (구버전 혼선 방지)
+    if (content.trim() === "[object Object]") {
+      throw new Error(
+        "INVALID_CONTENT_BLOCKS: content was stringified as [object Object]; redeploy solar parser v3",
+      );
+    }
+    return content;
+  }
+  if (content == null) return "";
+  if (Array.isArray(content)) {
+    // multimodal parts: [{type:'text', text:'...'}]
+    const textPart = content
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && typeof (part as any).text === "string") {
+          return (part as any).text;
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    return textPart || JSON.stringify(content);
+  }
+  if (typeof content === "object") return JSON.stringify(content);
+  return String(content);
 }
 
 export function calcCostKrw(input: number, output: number): number {
@@ -235,12 +190,11 @@ export function parseContentBlocks(solarText: string): ContentBlock[] {
 }
 
 export function parseContentBlocksWithOptions(
-  solarText: string,
+  solarText: string | Record<string, unknown>,
   options: ParseContentBlockOptions = {},
 ): ContentBlock[] {
   try {
-    const cleaned = solarText.trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = coerceSolarJson(solarText);
     if (!isRecord(parsed) || !Array.isArray(parsed.content_blocks)) {
       throw new Error("content_blocks must be an array");
     }
@@ -249,6 +203,35 @@ export function parseContentBlocksWithOptions(
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(`INVALID_CONTENT_BLOCKS: ${detail}`);
   }
+}
+
+/** string/object 모두 받아 JSON 객체로 만든다. JSON.parse(object) 절대 금지. */
+function coerceSolarJson(input: unknown): unknown {
+  if (input && typeof input === "object") return input;
+  if (typeof input !== "string") {
+    throw new Error(`unexpected content type: ${typeof input}`);
+  }
+
+  let cleaned = input.trim();
+  if (!cleaned || cleaned === "[object Object]") {
+    throw new Error(
+      "empty or invalid content ([object Object]) — redeploy chat-message with solar parser v3",
+    );
+  }
+
+  cleaned = cleaned
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  // 앞뒤 잡텍스트가 있어도 첫 { ... } 만 추출
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+
+  return JSON.parse(cleaned);
 }
 
 function validateContentBlocks(
@@ -386,6 +369,38 @@ export function createNoMatchBlocks(): ContentBlock[] {
   ];
 }
 
+/** 홈 Agent 콜드 스타트 — Solar 호출 없이 환영 + 숏컷 칩만 반환 */
+export function createColdStartBlocks(): ContentBlock[] {
+  return [
+    {
+      type: "text",
+      text:
+        "안녕하세요! 에듀플로 AI 도우미예요.\n학원 추천, 설명회, 일정, 상담까지 편하게 물어보세요.",
+    },
+    {
+      type: "quick_replies",
+      items: [
+        {
+          label: "🏫 학원 추천",
+          payload: "action:recommend_academies",
+        },
+        {
+          label: "📣 설명회",
+          payload: "action:explore_seminars",
+        },
+        {
+          label: "📅 일정 정리",
+          payload: "action:organize_schedule",
+        },
+        {
+          label: "💬 상담 예약",
+          payload: "action:book_consult",
+        },
+      ],
+    },
+  ];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -431,7 +446,7 @@ export async function queryAcademies(
   }
 
   const academies = data ?? [];
-  if (args.fee_max) {
+  if (args.fee_max != null) {
     return academies.filter((a: any) =>
       (a.classes as any[])?.some((c: any) =>
         c.is_recruiting && (!c.fee || c.fee <= args.fee_max!)

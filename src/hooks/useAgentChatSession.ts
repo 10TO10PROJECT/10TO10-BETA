@@ -8,6 +8,7 @@ import {
   buildAssistantMessage,
   buildErrorMessage,
   createChatSession,
+  ensureRemoteChatSession,
   nextMessageId,
   resetMessageIds,
   sendChatMessage,
@@ -16,6 +17,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 const MAX_RETRY_COUNT = 2;
 const RATE_LIMIT_COOLDOWN_SEC = 30;
+
+const COLD_START_ACTION_PROMPTS: Record<string, string> = {
+  "action:recommend_academies": "우리 아이에게 맞는 학원 추천해줘",
+  "action:explore_seminars": "지금 신청 가능한 설명회 알려줘",
+  "action:organize_schedule": "이번 주 일정 정리해줘",
+  "action:book_consult": "상담 예약하고 싶어",
+};
 
 export { MAX_RETRY_COUNT };
 
@@ -45,8 +53,16 @@ interface UseAgentChatSessionResult {
   toggleCardExpand: (cardId: string) => void;
 }
 
-export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionResult {
+interface UseAgentChatSessionOptions {
+  initialMessage?: string;
+}
+
+export function useAgentChatSession(
+  profileTags: string[],
+  options: UseAgentChatSessionOptions = {},
+): UseAgentChatSessionResult {
   const navigate = useNavigate();
+  const initialMessage = options.initialMessage?.trim() || undefined;
   const [sessionId, setSessionId] = useState("");
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [phase, setPhase] = useState<AgentPhase>("loading");
@@ -64,6 +80,7 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
   const assistantTurnRef = useRef(0);
   const mountedRef = useRef(true);
   const requestGenRef = useRef(0);
+  const initialMessageSentRef = useRef(false);
 
   const handleAuthRequired = useCallback(() => {
     toast.error("로그인이 필요합니다");
@@ -100,12 +117,19 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
             sessionId,
             nextTurnIndex,
             error.code as AgentErrorCode,
+            error.message,
           );
           assistantTurnRef.current = nextTurnIndex;
           setMessages((prev) => [...prev, errorMessage]);
           setPhase("active");
           return;
         }
+
+        // UNKNOWN 등 — 서버 원문을 보여 원인을 가린다
+        console.error("[agentChat]", error.code, error.message);
+        toast.error(error.message || "AI 응답을 불러오지 못했어요.");
+        setPhase("active");
+        return;
       }
 
       toast.error("AI 응답을 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
@@ -133,6 +157,7 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
     setSessionCountdown("02:00");
     pendingRef.current = null;
     assistantTurnRef.current = 0;
+    initialMessageSentRef.current = false;
 
     const { data: authData } = await supabase.auth.getSession();
     if (!mountedRef.current || generation !== requestGenRef.current) return;
@@ -242,14 +267,23 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
       const nextTurnIndex = assistantTurnRef.current + (request.isRetry ? 1 : 2);
       const generation = requestGenRef.current;
 
-      if (!sessionId) {
-        setPhase("active");
-        return;
-      }
-
       try {
+        let activeSessionId = sessionId;
+
+        // 로컬 콜드 스타트(session_id 없음) → 첫 전송 직전에 원격 세션 생성
+        if (!activeSessionId) {
+          const created = await ensureRemoteChatSession(profileTags);
+          if (!mountedRef.current || generation !== requestGenRef.current) return;
+          activeSessionId = created.session_id;
+          setSessionId(created.session_id);
+          assistantTurnRef.current = Math.max(
+            assistantTurnRef.current,
+            created.first_turn.turn_index,
+          );
+        }
+
         const response = await sendChatMessage(
-          sessionId,
+          activeSessionId,
           request.userText,
           request.payload,
         );
@@ -258,7 +292,7 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
         assistantTurnRef.current = response.turn_index;
         setMessages((prev) => [
           ...prev,
-          buildAssistantMessage(response, sessionId),
+          buildAssistantMessage(response, activeSessionId),
         ]);
         setTurnsRemaining(response.next_actions.turns_remaining);
 
@@ -276,10 +310,22 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
         setRetryCount(0);
       } catch (error) {
         if (!mountedRef.current || generation !== requestGenRef.current) return;
+
+        if (
+          error instanceof AgentChatApiError &&
+          error.message.includes("profile_tags")
+        ) {
+          toast.error(
+            `세션 생성 실패: ${error.message}. chat-session을 이 프로젝트(tglgxdfqfwspykzxwxgy)에 최신 코드로 다시 배포해 주세요.`,
+          );
+          setPhase("active");
+          return;
+        }
+
         applyApiError(error, nextTurnIndex);
       }
     },
-    [applyApiError, sessionId],
+    [applyApiError, sessionId, profileTags],
   );
 
   const sendTurn = useCallback(
@@ -307,10 +353,28 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
     [phase, turnsRemaining, processAssistantResponse],
   );
 
+  // 홈 숏컷 칩: 환영 메시지 표시 후 첫 user turn 자동 전송
+  // (로컬 콜드 스타트는 sessionId가 비어 있어도 진행 — 전송 시 원격 세션 생성)
+  useEffect(() => {
+    if (
+      !initialMessage ||
+      initialMessageSentRef.current ||
+      phase !== "active" ||
+      messages.length === 0 ||
+      turnsRemaining <= 0
+    ) {
+      return;
+    }
+    initialMessageSentRef.current = true;
+    sendTurn(initialMessage);
+  }, [initialMessage, phase, messages.length, turnsRemaining, sendTurn]);
+
   const sendQuickReply = useCallback(
     (messageId: string, label: string, payload: string) => {
       setConsumedQuickReplyIds((prev) => new Set(prev).add(messageId));
-      sendTurn(label, payload);
+      // 콜드 스타트 환영 칩: 짧은 라벨 대신 홈 숏컷과 동일한 발화로 전송
+      const prompt = COLD_START_ACTION_PROMPTS[payload] ?? label;
+      sendTurn(prompt, payload);
     },
     [sendTurn],
   );
@@ -353,8 +417,11 @@ export function useAgentChatSession(profileTags: string[]): UseAgentChatSessionR
     phase === "loading" || phase === "typing" || phase === "session_limit" || turnsRemaining <= 0;
 
   let inputPlaceholder = "메시지를 입력하세요…";
-  if (phase === "loading") inputPlaceholder = "AI가 추천을 준비하고 있어요…";
-  else if (phase === "typing") inputPlaceholder = "응답을 기다리는 중…";
+  if (phase === "loading") {
+    inputPlaceholder = profileTags.length === 0
+      ? "AI 도우미를 준비하고 있어요…"
+      : "AI가 추천을 준비하고 있어요…";
+  } else if (phase === "typing") inputPlaceholder = "응답을 기다리는 중…";
   else if (turnsRemaining <= WARN_TURNS_REMAINING && turnsRemaining > 0) {
     inputPlaceholder = `남은 대화 ${turnsRemaining}턴…`;
   } else if (phase === "session_limit" || turnsRemaining <= 0) {

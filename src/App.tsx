@@ -31,6 +31,7 @@ import LearningStyleTest from "./pages/LearningStyleTest";
 import LearningStyleResult from "./pages/LearningStyleResult";
 import PreferenceTest from "./pages/PreferenceTest";
 import PreferenceResult from "./pages/PreferenceResult";
+import AgentPage from "./pages/AgentPage";
 import TimetablePage from "./pages/TimetablePage";
 import EventsPage from "./pages/EventsPage";
 import ParentQrScannerPage from "./pages/parent/ParentQrScannerPage";
@@ -152,6 +153,7 @@ const App = () => {
               <Route path="/p/learning-style-result" element={<LearningStyleResult />} />
               <Route path="/p/preference-test" element={<PreferenceTest />} />
               <Route path="/p/preference-result" element={<PreferenceResult />} />
+              <Route path="/p/agent" element={<AgentPage />} />
               <Route path="/p/timetable" element={<TimetablePage />} />
               <Route path="/p/events" element={<EventsPage />} />
               <Route path="/p/announcements" element={<AnnouncementsPage />} />
@@ -188,6 +190,7 @@ const App = () => {
               <Route path="/s/learning-style-result" element={<LearningStyleResult />} />
               <Route path="/s/preference-test" element={<PreferenceTest />} />
               <Route path="/s/preference-result" element={<PreferenceResult />} />
+              <Route path="/s/agent" element={<AgentPage />} />
               <Route path="/s/timetable" element={<TimetablePage />} />
               <Route path="/s/events" element={<EventsPage />} />
               <Route path="/s/announcements" element={<AnnouncementsPage />} />
