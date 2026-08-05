@@ -231,7 +231,104 @@ function coerceSolarJson(input: unknown): unknown {
     cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
 
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch (firstError) {
+    const repaired = repairLlmJson(cleaned);
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      const snippet = cleaned.slice(0, 240).replace(/\s+/g, " ");
+      console.error(
+        "coerceSolarJson failed:",
+        firstError instanceof Error ? firstError.message : firstError,
+        "snippet:",
+        snippet,
+      );
+      throw firstError;
+    }
+  }
+}
+
+/**
+ * Solar(LLM)이 자주 내는 JSON 문법 오류 보정:
+ * - 배열/객체 요소 사이 누락 콤마 (`} {`, `"a" "b"`)
+ * - trailing comma
+ * - 문자열 안 미이스케이프 제어문자(개행 등)
+ */
+function repairLlmJson(text: string): string {
+  let s = escapeControlCharsInStrings(text);
+
+  // trailing commas: [1,] {a:1,}
+  s = s.replace(/,\s*([\]}])/g, "$1");
+
+  // missing commas between structural tokens
+  s = s.replace(/\}\s*\{/g, "},{");
+  s = s.replace(/\]\s*\[/g, "],[");
+  s = s.replace(/\}\s*\[/g, "},[");
+  s = s.replace(/\]\s*\{/g, "],{");
+
+  // missing commas before next property/string: 90\n"thumbnail" / "소수정예" "강남"
+  s = s.replace(/"\s+"/g, '","');
+  s = s.replace(/([0-9]|true|false|null)\s+"/gi, '$1,"');
+  s = s.replace(/([}\]])\s+"/g, '$1,"');
+
+  // trailing commas again (repair may reintroduce edge cases)
+  s = s.replace(/,\s*([\]}])/g, "$1");
+
+  return s;
+}
+
+/** JSON 문자열 리터럴 내부의 raw 제어문자를 이스케이프 */
+function escapeControlCharsInStrings(text: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        out += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        out += ch;
+        inString = false;
+        continue;
+      }
+      if (ch === "\n") {
+        out += "\\n";
+        continue;
+      }
+      if (ch === "\r") {
+        out += "\\r";
+        continue;
+      }
+      if (ch === "\t") {
+        out += "\\t";
+        continue;
+      }
+      const code = ch.charCodeAt(0);
+      if (code < 0x20) {
+        out += `\\u${code.toString(16).padStart(4, "0")}`;
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+
+    if (ch === '"') inString = true;
+    out += ch;
+  }
+
+  return out;
 }
 
 function validateContentBlocks(
@@ -364,6 +461,64 @@ export function createNoMatchBlocks(): ContentBlock[] {
         { label: "지역 넓히기", payload: "relax:region" },
         { label: "가격대 넓히기", payload: "relax:price" },
         { label: "과목만 유지", payload: "relax:subject_only" },
+      ],
+    },
+  ];
+}
+
+/**
+ * Solar JSON 파싱 실패 시 DB 학원 목록으로 카드 블록을 구성한다.
+ * (세션이 502로 깨지지 않도록 하는 최후 폴백)
+ */
+export function createAcademyRecommendationFallback(
+  academies: object[],
+  maxCards = MAX_ACADEMY_CARDS_PER_TURN,
+): ContentBlock[] {
+  if (!academies.length) return createNoMatchBlocks();
+
+  const items: AcademyCard[] = academies.slice(0, maxCards).map((raw, index) => {
+    const academy = raw as Record<string, unknown>;
+    const tags = Array.isArray(academy.tags)
+      ? academy.tags.filter((t): t is string => typeof t === "string").slice(0, 3)
+      : [];
+    const classes = Array.isArray(academy.classes) ? academy.classes : [];
+    const fee = classes
+      .map((c) => (isRecord(c) && typeof c.fee === "number" ? c.fee : null))
+      .find((v) => v != null) ?? 0;
+    const subject = typeof academy.subject === "string" ? academy.subject : "";
+    const thumbnail = subject.includes("영어")
+      ? "✏️"
+      : subject.includes("과학")
+      ? "🔬"
+      : "📐";
+
+    return {
+      id: String(academy.id ?? ""),
+      name: typeof academy.name === "string" ? academy.name : "학원",
+      match_score: Math.max(70, 95 - index * 4),
+      thumbnail,
+      reason_tags: tags.length
+        ? tags
+        : [subject || "추천", "맞춤"].filter(Boolean).slice(0, 3),
+      price_monthly: fee,
+    };
+  }).filter((card) => card.id.length > 0);
+
+  if (!items.length) return createNoMatchBlocks();
+
+  return [
+    {
+      type: "text",
+      text:
+        "선호도에 맞는 학원을 찾아봤어요.\n카드를 눌러 자세히 확인해보세요.",
+    },
+    { type: "academy_cards", items },
+    {
+      type: "quick_replies",
+      items: [
+        { label: "다른 학원 보기", payload: "action:recommend_academies" },
+        { label: "지역 넓히기", payload: "relax:region" },
+        { label: "가격대 넓히기", payload: "relax:price" },
       ],
     },
   ];

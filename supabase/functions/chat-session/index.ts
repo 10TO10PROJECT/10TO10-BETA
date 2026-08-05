@@ -9,6 +9,7 @@ import {
   BOOTSTRAP_PROMPT,
   calcCostKrw,
   callSolar,
+  createAcademyRecommendationFallback,
   createColdStartBlocks,
   createNoMatchBlocks,
   extractQueryArgs,
@@ -149,9 +150,22 @@ ${academyListToContext(academies)}
         });
         const latencyMs = Date.now() - t0;
 
-        content_blocks = parseContentBlocksWithOptions(solarRes.text, {
-          allowedAcademyIds,
-        });
+        try {
+          content_blocks = parseContentBlocksWithOptions(solarRes.text, {
+            allowedAcademyIds,
+          });
+        } catch (parseErr) {
+          const detail = parseErr instanceof Error
+            ? parseErr.message
+            : String(parseErr);
+          console.error(
+            "chat-session Solar parse fallback:",
+            detail,
+            "raw snippet:",
+            solarRes.text.slice(0, 240).replace(/\s+/g, " "),
+          );
+          content_blocks = createAcademyRecommendationFallback(academies);
+        }
         const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
         model_meta = {
           provider: "upstage",
