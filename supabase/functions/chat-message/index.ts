@@ -6,6 +6,7 @@ import {
   calcCostKrw,
   callSolar,
   collectAcademyCardIdsFromRows,
+  createAcademyRecommendationFallback,
   createNoMatchBlocks,
   extractQueryArgs,
   MAX_ACADEMY_CARDS_PER_SESSION,
@@ -99,6 +100,7 @@ const handler = async (req: Request): Promise<Response> => {
     // payload에 filter 지시가 있으면 재쿼리, 아니면 빈 학원 컨텍스트 (Solar가 대화로 처리)
     let academyContext = "";
     let allowedAcademyIds = new Set<string>();
+    let queriedAcademies: object[] = [];
     const shouldRequery = isFilterPayload(payload) ||
       isRelaxPayload(payload) ||
       isAcademyActionPayload(payload) ||
@@ -110,6 +112,7 @@ const handler = async (req: Request): Promise<Response> => {
       ]);
       args.exclude_ids = [...previousAcademyIds];
       const academies = await queryAcademies(supa, args);
+      queriedAcademies = academies;
       allowedAcademyIds = new Set(
         academies.map((academy: any) => String(academy.id)),
       );
@@ -153,12 +156,30 @@ const handler = async (req: Request): Promise<Response> => {
       });
       const latencyMs = Date.now() - t0;
 
-      content_blocks = parseContentBlocksWithOptions(solarRes.text, {
-        allowedAcademyIds: allowedAcademyIds.size
-          ? allowedAcademyIds
-          : new Set<string>(),
-        maxAcademyCards: academyContext ? remainingAcademyCards : 0,
-      });
+      try {
+        content_blocks = parseContentBlocksWithOptions(solarRes.text, {
+          allowedAcademyIds: allowedAcademyIds.size
+            ? allowedAcademyIds
+            : undefined,
+          maxAcademyCards: academyContext ? remainingAcademyCards : 0,
+        });
+      } catch (parseErr) {
+        const detail = parseErr instanceof Error
+          ? parseErr.message
+          : String(parseErr);
+        console.error(
+          "chat-message Solar parse fallback:",
+          detail,
+          "raw snippet:",
+          solarRes.text.slice(0, 240).replace(/\s+/g, " "),
+        );
+        content_blocks = queriedAcademies.length
+          ? createAcademyRecommendationFallback(
+            queriedAcademies,
+            remainingAcademyCards,
+          )
+          : createNoMatchBlocks();
+      }
       const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
       model_meta = {
         provider: "upstage",
