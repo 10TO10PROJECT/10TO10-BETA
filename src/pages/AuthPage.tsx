@@ -157,7 +157,16 @@ const AuthPage = () => {
         },
       });
       if (error) {
-        toast.error(error.message || "회원가입에 실패했습니다");
+        const msg = error.message?.toLowerCase() ?? "";
+        if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
+          toast.error("유효하지 않은 이메일 형식입니다");
+        } else if (msg.includes("already registered") || msg.includes("already in use") || msg.includes("user already exists")) {
+          toast.error("이미 가입된 이메일입니다");
+        } else if (msg.includes("password")) {
+          toast.error("비밀번호는 6자 이상이어야 합니다");
+        } else {
+          toast.error(error.message || "회원가입에 실패했습니다");
+        }
         return;
       }
       if (data?.user?.id) {

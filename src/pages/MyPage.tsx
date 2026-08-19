@@ -137,14 +137,14 @@ const MyPage = () => {
                 />
               ) : (
                 <span className="text-2xl font-bold text-primary">
-                  {profile?.user_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || "U"}
+                  {profile?.user_name?.charAt(0) || "U"}
                 </span>
               )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-primary-foreground">
-                  {profile?.user_name || user?.email?.split("@")[0] || "사용자"}
+                  {profile?.user_name || "사용자"}
                 </h2>
                 {user && (
                   <Button
