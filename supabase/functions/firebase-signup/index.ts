@@ -89,6 +89,8 @@ serve(async (req: Request) => {
     const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
       email,
       email_confirm: true,
+      phone,
+      phone_confirm: true,
       user_metadata: {
         phone,
         firebase_uid: payload.localId,
@@ -118,6 +120,17 @@ serve(async (req: Request) => {
     );
     if (roleError) {
       console.error("user_roles upsert:", roleError);
+    }
+
+    // 트리거가 profiles를 생성했으면 user_name을 명시적으로 업데이트 (트리거 타이밍 문제 방지)
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .upsert(
+        { id: newUser.user.id, phone, user_name },
+        { onConflict: "id" }
+      );
+    if (profileError) {
+      console.error("profiles upsert:", profileError);
     }
 
     // 클라이언트에서 Supabase 세션을 만들 수 있도록 매직 링크 토큰 생성

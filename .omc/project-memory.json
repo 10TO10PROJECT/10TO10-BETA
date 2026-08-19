@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1781421828452,
-  "projectRoot": "/Users/jaegupark/Desktop/eduflo",
+  "lastScanned": 1785756163573,
+  "projectRoot": "/Users/jaegupark/Desktop/10to10",
   "techStack": {
     "languages": [
       {
@@ -76,7 +76,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 4,
-      "lastAccessed": 1781421828395,
+      "lastAccessed": 1785756163559,
       "keyFiles": [
         "favicon.ico",
         "index.html",
@@ -88,7 +88,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 3,
-      "lastAccessed": 1781421828396,
+      "lastAccessed": 1785756163559,
       "keyFiles": [
         "beta-seminar-coupon.md",
         "notification-alimtalk-guide.md",
@@ -99,7 +99,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 3,
-      "lastAccessed": 1781421828405,
+      "lastAccessed": 1785756163561,
       "keyFiles": [
         "favicon.ico",
         "logo.png",
@@ -110,7 +110,7 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 5,
-      "lastAccessed": 1781421828407,
+      "lastAccessed": 1785756163562,
       "keyFiles": [
         "App.tsx",
         "index.css",
@@ -122,7 +122,7 @@
       "path": "supabase",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1781421828409,
+      "lastAccessed": 1785756163562,
       "keyFiles": [
         "config.toml"
       ]
@@ -131,7 +131,7 @@
       "path": "dist/assets",
       "purpose": "Static assets",
       "fileCount": 7,
-      "lastAccessed": 1781421828410,
+      "lastAccessed": 1785756163562,
       "keyFiles": [
         "AcademyDetailMap-9oxodDbl.js",
         "LocationMap-B9T2TgD-.js",
@@ -142,7 +142,7 @@
       "path": "src/assets",
       "purpose": "Static assets",
       "fileCount": 3,
-      "lastAccessed": 1781421828411,
+      "lastAccessed": 1785756163562,
       "keyFiles": [
         "logo.png",
         "marker.png"
@@ -152,7 +152,7 @@
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 58,
-      "lastAccessed": 1781421828411,
+      "lastAccessed": 1785756163563,
       "keyFiles": [
         "AcademyDetailMap.tsx",
         "AcademyMap.tsx",
@@ -162,19 +162,19 @@
     "src/lib": {
       "path": "src/lib",
       "purpose": "Library code",
-      "fileCount": 13,
-      "lastAccessed": 1781421828412,
+      "fileCount": 16,
+      "lastAccessed": 1785756163563,
       "keyFiles": [
         "academySession.ts",
-        "businessNumber.ts",
-        "classSubjects.ts"
+        "agentChatApi.ts",
+        "agentChatErrors.ts"
       ]
     },
     "supabase/migrations": {
       "path": "supabase/migrations",
       "purpose": "Database migrations",
-      "fileCount": 94,
-      "lastAccessed": 1781421828413,
+      "fileCount": 97,
+      "lastAccessed": 1785756163563,
       "keyFiles": [
         "20251229100131_76166afb-9676-4b16-983a-bf8b610cd6e4.sql",
         "20251229100315_6dac7089-e9dc-4355-af92-29a042ef1df1.sql",
