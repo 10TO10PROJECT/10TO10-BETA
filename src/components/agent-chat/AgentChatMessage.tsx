@@ -74,11 +74,6 @@ export function AgentChatMessage({
                   className="max-w-[248px] px-3.5 py-2.5 rounded-[14px] rounded-tl-sm bg-card text-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap border border-border/50"
                 >
                   {block.text}
-                  {message.session_meta && i === textBlocks.length - 1 && !cardBlock && (
-                    <small className="block mt-1 text-[10px] text-muted-foreground">
-                      {message.session_meta}
-                    </small>
-                  )}
                 </div>
               ) : null,
             )

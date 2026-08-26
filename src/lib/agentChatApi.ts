@@ -64,7 +64,6 @@ export function buildAssistantMessage(
     role: "assistant",
     content_blocks: turn.content_blocks,
     turn_index: turn.turn_index,
-    session_meta: `session_id=${sessionId} · turn ${turn.turn_index}/10`,
     error,
   };
 }
