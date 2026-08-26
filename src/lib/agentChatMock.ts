@@ -154,7 +154,6 @@ function buildAssistantMessage(
     role: "assistant",
     content_blocks: blocks,
     turn_index: turnIndex,
-    session_meta: `session_id=${sessionId} · turn ${turnIndex}/10`,
     error,
   };
 }

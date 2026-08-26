@@ -613,18 +613,33 @@ export async function queryAcademies(
 
 // ─── Profile Tags → Query Args ────────────────────────────────────
 
-// profile_tags 배열에서 지역/과목/학년 키워드 추출 (단순 매핑, 추후 Solar 위임 가능)
-const SUBJECT_KEYWORDS = [
-  "수학",
-  "영어",
-  "과학",
-  "국어",
-  "물리",
-  "화학",
-  "생물",
-  "역사",
-  "사회",
-];
+// profile_tags는 "category:value" 형식(tagDictionary.ts 기준)으로 들어온다.
+// 예: "subject:math", "grade:mid_2", "budget:mid" — 한글 원문이 아니므로 키워드 스캔 대신 값 매핑이 필요하다.
+const SUBJECT_TAG_TO_LABEL: Record<string, string> = {
+  math: "수학",
+  english: "영어",
+  korean: "국어",
+  science: "과학",
+  social: "사회",
+  coding: "코딩",
+};
+
+// academies.target_grade는 "초등/중등/고등" 같은 넓은 범주 라벨로 저장되므로,
+// grade:mid_2 같은 세부 학년 태그는 초/중/고 범주로 축약해서 매칭한다.
+const GRADE_PREFIX_TO_LABEL: Record<string, string> = {
+  elem: "초등",
+  mid: "중등",
+  high: "고등",
+};
+
+const BUDGET_TAG_TO_FEE_MAX: Record<string, number> = {
+  low: 300000,
+  mid: 500000,
+  high: 800000,
+};
+
+// chat-message에서는 profile_tags 뒤에 사용자의 자유 발화(userText)도 함께 넘어온다.
+// 자유 발화는 "category:value" 형식이 아니므로, 그 안의 한글 언급은 기존 방식대로 키워드 스캔한다.
 const REGION_KEYWORDS = [
   "강남",
   "서초",
@@ -636,23 +651,41 @@ const REGION_KEYWORDS = [
   "노원",
   "용산",
 ];
-const GRADE_PATTERNS = /초[1-6]|중[1-3]|고[1-3]/;
+const FREE_TEXT_SUBJECT_KEYWORDS = Object.values(SUBJECT_TAG_TO_LABEL);
 
 export function extractQueryArgs(profileTags: string[]): AcademyQueryArgs {
-  const tagStr = profileTags.join(" ");
-  const subject = SUBJECT_KEYWORDS.find((k) => tagStr.includes(k));
-  const region = REGION_KEYWORDS.find((k) => tagStr.includes(k));
-  const gradeMatch = tagStr.match(GRADE_PATTERNS);
+  let subject: string | undefined;
+  let region: string | undefined;
+  let target_grade: string | undefined;
+  let fee_max: number | undefined;
 
-  const feeMatch = tagStr.match(/월\s*(\d+)만/);
-  const fee_max = feeMatch ? parseInt(feeMatch[1]) * 10000 : undefined;
+  for (const tag of profileTags) {
+    if (tag.includes(":")) {
+      const [category, value] = tag.split(":");
+      if (category === "subject" && !subject) {
+        subject = SUBJECT_TAG_TO_LABEL[value];
+      } else if (category === "grade" && !target_grade) {
+        target_grade = GRADE_PREFIX_TO_LABEL[value?.split("_")[0]];
+      } else if (category === "budget" && fee_max === undefined) {
+        fee_max = BUDGET_TAG_TO_FEE_MAX[value];
+      }
+      continue;
+    }
 
-  return {
-    subject,
-    region,
-    target_grade: gradeMatch?.[0],
-    fee_max,
-  };
+    // 자유 발화 (예: chat-message의 userText) — 한글 키워드 스캔으로 보완
+    if (!subject) {
+      subject = FREE_TEXT_SUBJECT_KEYWORDS.find((k) => tag.includes(k));
+    }
+    if (!region) {
+      region = REGION_KEYWORDS.find((k) => tag.includes(k));
+    }
+    if (fee_max === undefined) {
+      const feeMatch = tag.match(/월\s*(\d+)만/);
+      if (feeMatch) fee_max = parseInt(feeMatch[1]) * 10000;
+    }
+  }
+
+  return { subject, region, target_grade, fee_max };
 }
 
 // ─── Academy List → Solar Context String ──────────────────────────
