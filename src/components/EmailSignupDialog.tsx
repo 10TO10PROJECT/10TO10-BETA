@@ -50,7 +50,9 @@ const EmailSignupDialog = ({ open, onOpenChange, onSuccess, defaultRole = "paren
       });
       if (error) {
         const msg = error.message?.toLowerCase() ?? "";
-        if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
+        if (error.status === 429 || msg.includes("rate limit")) {
+          toast.error("가입 요청이 많아 잠시 처리할 수 없습니다. 잠시 후 다시 시도해주세요.");
+        } else if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
           toast.error("유효하지 않은 이메일 형식입니다");
         } else if (msg.includes("already registered") || msg.includes("already in use") || msg.includes("user already exists")) {
           toast.error("이미 가입된 이메일입니다");
@@ -72,7 +74,11 @@ const EmailSignupDialog = ({ open, onOpenChange, onSuccess, defaultRole = "paren
         if (roleError) {
           logError("email-signup-dialog-role", roleError);
         }
-        toast.success("회원가입이 완료되었습니다. 로그인해주세요.");
+        toast.success(
+          data.session
+            ? "회원가입이 완료되었습니다. 로그인해주세요."
+            : "인증 메일을 보냈습니다. 메일의 링크로 인증한 뒤 로그인해주세요."
+        );
         setEmail("");
         setPassword("");
         setConfirmPassword("");
