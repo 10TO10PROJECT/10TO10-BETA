@@ -131,7 +131,7 @@ const ExplorePage = () => {
         .from("seminars")
         .select(`
           *,
-          academy:academies!inner (
+          academy:academies (
             name,
             target_regions
           )
@@ -141,8 +141,9 @@ const ExplorePage = () => {
 
       if (error) throw error;
       
-      // Filter by target_regions
+      // 슈퍼관리자 설명회(academy_id 없음)는 지역과 무관하게 표시
       const filtered = ((data as any) || []).filter((seminar: any) => {
+        if (!seminar.academy_id || selectedRegion === REGION_ALL) return true;
         const regions = seminar.academy?.target_regions || [];
         return regions.includes(selectedRegion);
       });
