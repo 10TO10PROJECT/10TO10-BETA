@@ -54,7 +54,7 @@ const ImageCarouselWithIndicators = ({ imageUrls, title }: ImageCarouselWithIndi
               <img
                 src={url}
                 alt={`${title} - ${idx + 1}`}
-                className="w-full h-auto max-h-[70vh] object-contain"
+                className="block w-full h-auto"
               />
             </div>
           </div>
