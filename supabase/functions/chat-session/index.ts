@@ -125,23 +125,32 @@ ${academyListToContext(academies)}
         },
       ];
 
-      const t0 = Date.now();
-      const solarRes = await callSolar(messages, {
-        promptCacheKey: `chat-session:${session.id}`,
-      });
-      const latencyMs = Date.now() - t0;
+      try {
+        const t0 = Date.now();
+        const solarRes = await callSolar(messages, {
+          promptCacheKey: `chat-session:${session.id}`,
+          timeoutMs: 20000,
+        });
+        const latencyMs = Date.now() - t0;
 
-      content_blocks = parseContentBlocksWithOptions(solarRes.text, {
-        allowedAcademyIds,
-      });
-      const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
-      model_meta = {
-        provider: "upstage",
-        model: SOLAR_MODEL,
-        latency_ms: latencyMs,
-        tokens: solarRes.usage,
-        cost_krw: cost,
-      };
+        content_blocks = parseContentBlocksWithOptions(solarRes.text, {
+          allowedAcademyIds,
+        });
+        const cost = calcCostKrw(solarRes.usage.input, solarRes.usage.output);
+        model_meta = {
+          provider: "upstage",
+          model: SOLAR_MODEL,
+          latency_ms: latencyMs,
+          tokens: solarRes.usage,
+          cost_krw: cost,
+        };
+      } catch (solarErr: unknown) {
+        const errMsg = solarErr instanceof Error
+          ? solarErr.message
+          : String(solarErr);
+        console.error("Solar call failed, using fallback:", errMsg);
+        // Solar 실패 시 no-match fallback으로 graceful degradation
+      }
     }
 
     // assistant turn 저장 + 세션 업데이트 (병렬)
@@ -182,11 +191,6 @@ ${academyListToContext(academies)}
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("chat-session error:", msg);
-    if (e instanceof DOMException && e.name === "AbortError") {
-      return errResp(504, "SOLAR_TIMEOUT");
-    }
-    if (msg.startsWith("SOLAR_")) return errResp(502, msg);
-    if (msg.startsWith("INVALID_CONTENT_BLOCKS")) return errResp(502, msg);
     return errResp(500, msg);
   }
 };
