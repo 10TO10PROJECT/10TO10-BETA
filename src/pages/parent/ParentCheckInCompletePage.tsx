@@ -67,7 +67,7 @@ const ParentCheckInCompletePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -80,7 +80,7 @@ const ParentCheckInCompletePage = () => {
   const dDay = getCouponDday(primaryCoupon.valid_until);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-app-shell flex flex-col">
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-10 flex flex-col items-center justify-center">
         <div
           className={`mb-8 transition-all duration-700 ${

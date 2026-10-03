@@ -352,7 +352,7 @@ const ParentCheckInVerifyPage = () => {
 
   if (loadingSession) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -361,7 +361,7 @@ const ParentCheckInVerifyPage = () => {
   if (!session || !sessionId) return null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-app-shell">
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/p/check-in")}>

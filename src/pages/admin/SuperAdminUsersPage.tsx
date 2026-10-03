@@ -283,7 +283,7 @@ const SuperAdminUsersPage = () => {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -291,7 +291,7 @@ const SuperAdminUsersPage = () => {
 
   if (!isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-app-shell flex flex-col items-center justify-center p-4">
         <Shield className="w-16 h-16 text-muted-foreground mb-4" />
         <h1 className="text-xl font-semibold text-foreground mb-2">접근 권한이 없습니다</h1>
         <Button onClick={() => navigate('/admin/home')}>돌아가기</Button>
@@ -300,7 +300,7 @@ const SuperAdminUsersPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-app-shell pb-20">
       {/* Header */}
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">

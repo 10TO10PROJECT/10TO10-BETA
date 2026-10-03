@@ -54,7 +54,7 @@ const RoleSelection = () => {
   const iconClass = "h-6 w-6 text-edumap-mint sm:h-7 sm:w-7";
 
   return (
-    <div className="flex min-h-screen min-h-dvh flex-col overflow-y-auto bg-background">
+    <div className="flex min-h-screen min-h-dvh flex-col overflow-y-auto bg-app-shell">
       <div
         className={cn(
           "flex flex-1 flex-col justify-center px-4 py-6 sm:px-6 sm:py-10",

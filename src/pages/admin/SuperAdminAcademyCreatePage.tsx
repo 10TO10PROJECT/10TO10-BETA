@@ -407,7 +407,7 @@ const SuperAdminAcademyCreatePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -415,7 +415,7 @@ const SuperAdminAcademyCreatePage = () => {
 
   if (!isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-app-shell flex flex-col items-center justify-center p-4">
         <Shield className="w-16 h-16 text-muted-foreground mb-4" />
         <h1 className="text-xl font-semibold text-foreground mb-2">접근 권한이 없습니다</h1>
         <p className="text-muted-foreground text-center mb-6">
@@ -429,7 +429,7 @@ const SuperAdminAcademyCreatePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-app-shell pb-20">
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/admin/super/academies')}>

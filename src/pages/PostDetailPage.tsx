@@ -168,7 +168,7 @@ const PostDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-app-shell">
         <div className="h-14 border-b border-border flex items-center px-4">
           <Skeleton className="h-9 w-9 rounded" />
           <Skeleton className="h-5 w-24 ml-4" />
@@ -184,7 +184,7 @@ const PostDetailPage = () => {
 
   if (error || !post) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-app-shell flex flex-col">
         <div className="h-14 border-b border-border flex items-center px-4">
           <button
             type="button"

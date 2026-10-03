@@ -393,7 +393,7 @@ const AcademyDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -401,7 +401,7 @@ const AcademyDetailPage = () => {
 
   if (!academy) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-app-shell flex flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">학원을 찾을 수 없습니다</p>
         <Button onClick={() => navigate(-1)}>뒤로 가기</Button>
       </div>
@@ -409,7 +409,7 @@ const AcademyDetailPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-32">
+    <div className="min-h-screen bg-app-shell pb-32">
       {/* Header */}
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">

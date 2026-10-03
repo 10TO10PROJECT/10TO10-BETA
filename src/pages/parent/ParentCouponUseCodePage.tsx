@@ -147,7 +147,7 @@ const ParentCouponUseCodePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -156,7 +156,7 @@ const ParentCouponUseCodePage = () => {
   if (!useCode) return null;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-app-shell flex flex-col">
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-10 flex flex-col items-center justify-center text-center">
         <p className="text-sm text-muted-foreground mb-2">{academyName}</p>
         <h1 className="text-lg font-semibold text-foreground mb-10">학원에 코드를 보여주세요</h1>
