@@ -42,7 +42,7 @@ const ParentCouponUsedPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -53,7 +53,7 @@ const ParentCouponUsedPage = () => {
   const usedAtLabel = coupon.used_at ? formatUsedAt(coupon.used_at) : null;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-app-shell flex flex-col">
       <main className="flex-1 max-w-lg mx-auto w-full px-4 flex flex-col items-center justify-center text-center">
         <div
           className={`mb-8 transition-all duration-700 ${

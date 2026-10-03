@@ -1,7 +1,8 @@
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,77 @@ function getDefaults(fields: SurveyField[]): Record<string, any> {
   return defaults;
 }
 
+function renderBold(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
+const FieldLabel = ({ label, required }: { label: string; required: boolean }) => (
+  <Label className="block text-[13px] font-bold whitespace-pre-wrap">
+    {renderBold(label)}
+    {required
+      ? <span className="text-destructive ml-1">*</span>
+      : <span className="ml-1 font-medium text-muted-foreground">(선택)</span>}
+  </Label>
+);
+
+interface ConsentRowProps {
+  text: string;
+  link?: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+/** 첫 줄은 동의 제목, 나머지 줄은 [보기]로 펼치는 상세 내용 */
+const ConsentRow = ({ text, link, checked, onCheckedChange }: ConsentRowProps) => {
+  const [expanded, setExpanded] = useState(false);
+  const [title, ...rest] = text.split('\n');
+  const detail = rest.join('\n').trim();
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={checked}
+            onCheckedChange={(value) => onCheckedChange(value === true)}
+          />
+          <span className="text-[13px] text-foreground">
+            {renderBold(title)}
+            <span className="text-destructive ml-1">*</span>
+          </span>
+        </label>
+        {detail ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="shrink-0 text-xs text-muted-foreground underline underline-offset-2"
+          >
+            {expanded ? '접기' : '보기'}
+          </button>
+        ) : link ? (
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-xs text-muted-foreground underline underline-offset-2"
+          >
+            보기
+          </a>
+        ) : null}
+      </div>
+      {detail && expanded && (
+        <div className="mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+          {renderBold(detail)}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SurveyFormRenderer = ({ fields, onSubmit, submitting, renderOnly, formRef }: SurveyFormRendererProps) => {
   const schema = useMemo(() => buildSchema(fields), [fields]);
   const defaults = useMemo(() => getDefaults(fields), [fields]);
@@ -126,28 +198,22 @@ const SurveyFormRenderer = ({ fields, onSubmit, submitting, renderOnly, formRef 
   const content = (
     <div className="space-y-4">
       {fields.map((field) => (
-        <div key={field.id} className="space-y-2">
+        <div key={field.id} className="space-y-1.5">
           {/* Text field */}
           {field.type === 'text' && (
             <>
-              <Label className="text-sm whitespace-pre-wrap">
-                {field.label.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                  part.startsWith('**') && part.endsWith('**')
-                    ? <strong key={i}>{part.slice(2, -2)}</strong>
-                    : part
-                )}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
+              <FieldLabel label={field.label} required={field.required} />
               <Controller
                 name={field.id}
                 control={control}
                 render={({ field: formField }) => (
                   <Textarea
-                    placeholder="답변을 입력하세요"
+                    placeholder="답변을 입력해 주세요"
                     value={formField.value || ''}
                     onChange={formField.onChange}
-                    rows={3}
+                    rows={2}
                     maxLength={1000}
+                    className="min-h-0 rounded-xl resize-none"
                   />
                 )}
               />
@@ -160,41 +226,35 @@ const SurveyFormRenderer = ({ fields, onSubmit, submitting, renderOnly, formRef 
           {/* Multiple choice field */}
           {field.type === 'multiple_choice' && (
             <>
-              <Label className="text-sm whitespace-pre-wrap">
-                {field.label.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                  part.startsWith('**') && part.endsWith('**')
-                    ? <strong key={i}>{part.slice(2, -2)}</strong>
-                    : part
-                )}
-                {field.required && <span className="text-destructive ml-1">*</span>}
-              </Label>
-              
+              <FieldLabel label={field.label} required={field.required} />
               <Controller
                 name={field.id}
                 control={control}
                 render={({ field: formField }) => (
-                  <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {field.options?.map((option, optIdx) => {
                       if (!option.trim()) return null;
-                      const checked = (formField.value as string[] || []).includes(option);
+                      const current = (formField.value as string[]) || [];
+                      const checked = current.includes(option);
                       return (
-                        <label
+                        <button
                           key={optIdx}
-                          className="flex items-center gap-3 p-2.5 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors"
+                          type="button"
+                          aria-pressed={checked}
+                          onClick={() =>
+                            formField.onChange(
+                              checked ? current.filter((v) => v !== option) : [...current, option]
+                            )
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                            checked
+                              ? "border-primary bg-primary/10 text-secondary-foreground"
+                              : "border-border text-muted-foreground hover:bg-muted"
+                          )}
                         >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(isChecked) => {
-                              const current = formField.value as string[] || [];
-                              if (isChecked) {
-                                formField.onChange([...current, option]);
-                              } else {
-                                formField.onChange(current.filter((v: string) => v !== option));
-                              }
-                            }}
-                          />
-                          <span className="text-sm">{option}</span>
-                        </label>
+                          {option}
+                        </button>
                       );
                     })}
                   </div>
@@ -213,23 +273,12 @@ const SurveyFormRenderer = ({ fields, onSubmit, submitting, renderOnly, formRef 
                 name={field.id}
                 control={control}
                 render={({ field: formField }) => (
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors">
-                    <Checkbox
-                      checked={formField.value === true}
-                      onCheckedChange={(checked) => formField.onChange(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                    <span className="text-sm whitespace-pre-wrap">
-                        {(field.consentText || field.label).split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                          part.startsWith('**') && part.endsWith('**')
-                            ? <strong key={i}>{part.slice(2, -2)}</strong>
-                            : part
-                        )}
-                        <span className="text-destructive ml-1">*</span>
-                      </span>
-                    </div>
-                  </label>
+                  <ConsentRow
+                    text={field.consentText || field.label}
+                    link={field.consentLink}
+                    checked={formField.value === true}
+                    onCheckedChange={(checked) => formField.onChange(checked)}
+                  />
                 )}
               />
               {errors[field.id] && (

@@ -247,7 +247,7 @@ const ExplorePage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-app-shell pb-20">
       <div ref={aboveMapRef}>
         {/* Header */}
         <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">

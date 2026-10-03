@@ -4,8 +4,11 @@
 
 @layer base {
   :root {
-    --background: 164 45% 97%;
+    --background: 0 0% 100%;
     --foreground: 0 0% 20%;
+
+    /* 데스크톱에서 콘텐츠 컬럼(max-w-lg) 양옆 여백 색 */
+    --gutter: 164 45% 97%;
 
     --card: 0 0% 100%;
     --card-foreground: 0 0% 20%;
@@ -45,6 +48,8 @@
     --background: 164 20% 8%;
     --foreground: 164 20% 95%;
 
+    --gutter: 164 20% 8%;
+
     --card: 164 20% 12%;
     --card-foreground: 164 20% 95%;
 
@@ -78,12 +83,23 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-gutter text-foreground font-sans antialiased;
     font-family: 'Noto Sans KR', sans-serif;
   }
 }
 
 @layer utilities {
+  /* 페이지 루트용: 가운데 32rem(max-w-lg)은 콘텐츠 배경, 양옆은 gutter 색 */
+  .bg-app-shell {
+    background: linear-gradient(
+      to right,
+      hsl(var(--gutter)) calc(50% - 16rem),
+      hsl(var(--background)) calc(50% - 16rem),
+      hsl(var(--background)) calc(50% + 16rem),
+      hsl(var(--gutter)) calc(50% + 16rem)
+    );
+  }
+
   .gradient-primary {
     background: var(--gradient-primary);
   }

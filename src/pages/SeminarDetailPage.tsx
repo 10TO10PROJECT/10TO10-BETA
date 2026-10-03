@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import ImageCarouselWithIndicators from "@/components/ImageCarouselWithIndicators";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import {
   Select,
   SelectContent,
@@ -35,11 +36,20 @@ import {
   Share2,
   Heart,
   AlertCircle,
+  Check,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { logError } from "@/lib/errorLogger";
 import { seminarApplicationSchema, validateInput } from "@/lib/validation";
 import SurveyFormRenderer from "@/components/SurveyFormRenderer";
+import {
+  SeminarContentFooter,
+  SeminarContentSections,
+  SeminarDeadlineBand,
+} from "@/components/SeminarContentBlocks";
+import { getSeminarContent } from "@/content/seminarContent";
 
 interface Seminar {
   id: string;
@@ -65,6 +75,67 @@ interface Seminar {
   } | null;
 }
 
+const PARENT_COUNT_RANGE = { min: 1, max: 2 };
+const STUDENT_COUNT_RANGE = { min: 0, max: 2 };
+
+function parseSeminarLocation(location: string | null) {
+  if (!location) return { name: "", detail: "", address: "" };
+  try {
+    const parsed = JSON.parse(location);
+    return {
+      name: parsed.name || "",
+      detail: parsed.detail || "",
+      address: parsed.address || "",
+    };
+  } catch {
+    return { name: location, detail: "", address: "" };
+  }
+}
+
+/** 숫자만 입력해도 010-0000-0000 형식으로 맞춘다 */
+function formatPhoneNumber(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length < 4) return digits;
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+interface CountStepperProps {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+}
+
+const CountStepper = ({ label, value, min, max, onChange }: CountStepperProps) => (
+  <div className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
+    <span className="text-sm font-bold text-foreground">{label}</span>
+    <div className="flex items-center gap-2.5">
+      <button
+        type="button"
+        aria-label={`${label} 인원 줄이기`}
+        disabled={value <= min}
+        onClick={() => onChange(value - 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition-opacity disabled:opacity-40"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <span className="w-4 text-center text-sm font-bold tabular-nums text-foreground">{value}</span>
+      <button
+        type="button"
+        aria-label={`${label} 인원 늘리기`}
+        disabled={value >= max}
+        onClick={() => onChange(value + 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground transition-opacity disabled:opacity-40"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  </div>
+);
+
 /** 직접 링크로 들어온 경우(앱 내 이전 페이지 없음) true */
 function isDirectEntry(): boolean {
   if (typeof window === "undefined") return false;
@@ -88,14 +159,13 @@ const SeminarDetailPage = () => {
   const [myApplication, setMyApplication] = useState<any>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
-  const [completionMessage, setCompletionMessage] = useState("");
   const [isPhoneAutoFilled, setIsPhoneAutoFilled] = useState(false);
 
   // Form state
   const [parentName, setParentName] = useState("");
   const [parentPhone, setParentPhone] = useState("");
-  const [parentCount, setParentCount] = useState("1");
-  const [studentCount, setStudentCount] = useState("1");
+  const [parentCount, setParentCount] = useState(1);
+  const [studentCount, setStudentCount] = useState(0);
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
   const surveyFormRef = useRef<{ triggerSubmit: () => void; isValid: () => boolean; getAnswers: () => Record<string, SurveyAnswer> } | null>(null);
 
@@ -220,8 +290,8 @@ const SeminarDetailPage = () => {
       return;
     }
 
-    const pCount = parseInt(parentCount) || 0;
-    const sCount = parseInt(studentCount) || 0;
+    const pCount = parentCount;
+    const sCount = studentCount;
     if (pCount + sCount <= 0) {
       toast.error('참석 인원을 입력해주세요');
       return;
@@ -257,17 +327,13 @@ const SeminarDetailPage = () => {
         }).catch(() => {});
       }
 
-      setIsDialogOpen(false);
       setHasApplied(true);
       setMyApplication({ student_name: parentName.trim() });
       fetchApplicationCount();
-
-      // Show completion dialog
-      setCompletionMessage((seminar as any).completion_message || "설명회 신청이 완료되었습니다");
       setShowCompletionDialog(true);
     } catch (error) {
       logError("apply-seminar", error);
-      toast.error("신청에 실패했습니다");
+      toast.error("신청이 저장되지 않았어요. 잠시 후 다시 눌러 주세요.");
     } finally {
       setSubmitting(false);
     }
@@ -276,8 +342,8 @@ const SeminarDetailPage = () => {
   const resetForm = () => {
     setParentName("");
     setParentPhone("");
-    setParentCount("1");
-    setStudentCount("1");
+    setParentCount(PARENT_COUNT_RANGE.min);
+    setStudentCount(STUDENT_COUNT_RANGE.min);
     setCustomAnswers({});
   };
 
@@ -335,7 +401,7 @@ const SeminarDetailPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-app-shell flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
@@ -352,7 +418,7 @@ const SeminarDetailPage = () => {
 
   if (!seminar) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4 p-4">
+      <div className="min-h-screen bg-app-shell flex flex-col items-center justify-center gap-4 p-4">
         <AlertCircle className="w-16 h-16 text-muted-foreground" />
         <p className="text-muted-foreground text-center">설명회를 찾을 수 없습니다</p>
         <Button onClick={handleBackToMain}>뒤로 가기</Button>
@@ -366,13 +432,22 @@ const SeminarDetailPage = () => {
   const dDay = getDDay(seminar.date);
   const isUrgent = dDay && dDay !== "D-Day" && parseInt(dDay.replace("D-", "")) <= 3;
 
+  const content = getSeminarContent(seminar.id);
+  const seminarLocation = parseSeminarLocation(seminar.location);
+  const seminarDate = new Date(seminar.date);
+  const shortDate = `${seminarDate.getMonth() + 1}/${seminarDate.getDate()}`;
+  const shortTime = seminarDate.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+  const placeName = seminar.academy?.name || seminarLocation.name;
+  const completionMessage: string | null = (seminar as any).completion_message || null;
+  const canSubmit = !submitting && !!parentName.trim() && !!parentPhone.trim();
+
   // Generate tags
   const tags: string[] = [];
   if (seminar.target_grade) tags.push(`#${seminar.target_grade}`);
   if (seminar.subject) tags.push(`#${seminar.subject}`);
 
   return (
-    <div className="min-h-screen bg-background pb-28">
+    <div className={`min-h-screen bg-app-shell ${content?.cta?.note ? "pb-36" : "pb-28"}`}>
       {/* Header */}
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
@@ -426,7 +501,7 @@ const SeminarDetailPage = () => {
                 <img
                   src={imageUrls[0]}
                   alt={seminar.title}
-                  className="w-full h-auto max-h-[70vh] object-contain"
+                  className="block w-full h-auto"
                 />
               ) : (
                 <div className="text-center p-6">
@@ -534,19 +609,7 @@ const SeminarDetailPage = () => {
             </p>
           </div>
           {(() => {
-            let locName = "";
-            let locDetail = "";
-            let locAddress = "";
-            if (seminar.location) {
-              try {
-                const parsed = JSON.parse(seminar.location);
-                locName = parsed.name || "";
-                locDetail = parsed.detail || "";
-                locAddress = parsed.address || "";
-              } catch {
-                locName = seminar.location;
-              }
-            }
+            const { name: locName, address: locAddress } = seminarLocation;
             return (
               <div className="bg-card border border-border rounded-xl p-4 col-span-2 shadow-card">
                 <div className="flex items-center gap-2 text-primary mb-2">
@@ -566,8 +629,10 @@ const SeminarDetailPage = () => {
           })()}
         </div>
 
+        {content?.deadline && <SeminarDeadlineBand deadline={content.deadline} />}
+
         {/* Capacity with Progress */}
-        <div className="bg-card border border-border rounded-xl p-4 mb-6 shadow-card">
+        <div className={`bg-card border border-border rounded-xl p-4 shadow-card ${content ? "mb-8" : "mb-6"}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-primary">
               <Users className="w-5 h-5" />
@@ -585,21 +650,24 @@ const SeminarDetailPage = () => {
           </p>
         </div>
 
-        {/* Description */}
-        <div className="mb-6">
-          <h2 className="font-bold text-foreground text-lg mb-3">설명회 안내</h2>
-          <div className="bg-card border border-border rounded-xl p-5 shadow-card">
-            <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-              {seminar.description
-                ? seminar.description.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                    part.startsWith('**') && part.endsWith('**')
-                      ? <strong key={i}>{part.slice(2, -2)}</strong>
-                      : part
-                  )
-                : "상세 내용이 없습니다."}
+        {content ? (
+          <SeminarContentSections content={content} />
+        ) : (
+          <div className="mb-6">
+            <h2 className="font-bold text-foreground text-lg mb-3">설명회 안내</h2>
+            <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+              <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                {seminar.description
+                  ? seminar.description.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                      part.startsWith('**') && part.endsWith('**')
+                        ? <strong key={i}>{part.slice(2, -2)}</strong>
+                        : part
+                    )
+                  : "상세 내용이 없습니다."}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* My Application Status */}
         {hasApplied && myApplication && (
@@ -620,6 +688,8 @@ const SeminarDetailPage = () => {
             </div>
           </div>
         )}
+
+        {content?.footer && <SeminarContentFooter footer={content.footer} />}
       </main>
 
       {/* Fixed Bottom Button */}
@@ -634,162 +704,233 @@ const SeminarDetailPage = () => {
               <CheckCircle2 className="w-5 h-5 mr-2" />
               신청 완료됨
             </Button>
-          ) : (
-            <Button
-              className="w-full h-14 text-base font-semibold"
-              size="xl"
-              disabled={seminar.status === "closed" || remainingSpots <= 0}
-              onClick={() => setIsDialogOpen(true)}
-            >
-              {seminar.status === "closed" || remainingSpots <= 0
-                ? "모집 마감"
-                : "설명회 참가 신청하기"}
+          ) : seminar.status === "closed" || remainingSpots <= 0 ? (
+            <Button className="w-full h-14 text-base font-semibold" size="xl" disabled>
+              모집 마감
             </Button>
+          ) : (
+            <>
+              {content?.cta?.note && (
+                <p className="mb-2 text-center text-xs font-medium text-muted-foreground">
+                  {content.cta.note}
+                </p>
+              )}
+              <Button
+                className="w-full h-14 text-base font-semibold"
+                size="xl"
+                onClick={() => setIsDialogOpen(true)}
+              >
+                {content?.cta ? (
+                  <>
+                    {content.cta.label}
+                    {content.cta.sub && (
+                      <span className="ml-1 text-sm font-medium opacity-85">· {content.cta.sub}</span>
+                    )}
+                  </>
+                ) : (
+                  "설명회 참가 신청하기"
+                )}
+              </Button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Application Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-sm mx-auto max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-lg">설명회 참가 신청</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4 overflow-y-auto overflow-x-visible flex-1 min-h-0 px-1">
-            {/* Default fields: parent name, phone, attendee counts */}
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">학부모 이름 <span className="text-destructive">*</span></Label>
-                <Input
-                  placeholder="이름을 입력하세요"
-                  value={parentName}
-                  onChange={(e) => setParentName(e.target.value)}
-                  maxLength={50}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">전화번호 <span className="text-destructive">*</span></Label>
-                <Input
-                  placeholder="전화번호를 입력하세요"
-                  value={parentPhone}
-                  onChange={(e) => {
-                    setParentPhone(e.target.value);
-                    if (isPhoneAutoFilled) setIsPhoneAutoFilled(false);
-                  }}
-                  maxLength={20}
-                  type="tel"
-                  readOnly={isPhoneAutoFilled}
-                />
-                {isPhoneAutoFilled && (
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">로그인된 계정의 전화번호가 자동 입력되었습니다.</p>
-                    <button
-                      type="button"
-                      className="text-xs text-primary underline underline-offset-2"
-                      onClick={() => setIsPhoneAutoFilled(false)}
-                    >
-                      직접 입력
-                    </button>
+      {/* Application Sheet */}
+      <Drawer
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setShowCompletionDialog(false);
+        }}
+      >
+        <DrawerContent
+          className="max-w-lg mx-auto max-h-[92vh] rounded-t-[22px] border-x-0 border-b-0"
+          overlayClassName="bg-black/45"
+        >
+          {showCompletionDialog ? (
+            <>
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-6 pb-4 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <Check className="h-7 w-7" strokeWidth={3} />
+                </div>
+                <DrawerTitle className="mt-3 text-[22px] font-extrabold tracking-tight">
+                  예약됐어요!
+                </DrawerTitle>
+                <DrawerDescription className="mt-1 text-[13px]">
+                  {shortDate}에 뵙겠습니다
+                </DrawerDescription>
+
+                <dl className="mt-5 space-y-1.5 rounded-2xl border border-border px-4 py-3 text-left text-[13px] text-muted-foreground">
+                  <div className="flex gap-3">
+                    <dt className="w-10 shrink-0 font-bold text-foreground">일시</dt>
+                    <dd>{formatDate(seminar.date)} {shortTime}</dd>
                   </div>
+                  {(seminarLocation.address || placeName) && (
+                    <div className="flex gap-3">
+                      <dt className="w-10 shrink-0 font-bold text-foreground">장소</dt>
+                      <dd>{seminarLocation.address || placeName}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-3">
+                    <dt className="w-10 shrink-0 font-bold text-foreground">인원</dt>
+                    <dd>학부모 {parentCount} · 학생 {studentCount}</dd>
+                  </div>
+                </dl>
+
+                {completionMessage && (
+                  <p className="mt-3 rounded-lg bg-muted px-3 py-2.5 text-left text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                    {completionMessage.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
+                      part.startsWith('**') && part.endsWith('**')
+                        ? <strong key={i} className="text-foreground">{part.slice(2, -2)}</strong>
+                        : part
+                    )}
+                  </p>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">학부모 인원 <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={10}
-                    placeholder="0"
-                    value={parentCount}
-                    onChange={(e) => setParentCount(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-sm font-medium">학생 인원 <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={10}
-                    placeholder="0"
-                    value={studentCount}
-                    onChange={(e) => setStudentCount(e.target.value)}
-                  />
-                </div>
+              <div className="px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                <Button
+                  className="h-14 w-full rounded-2xl text-base font-bold"
+                  onClick={() => setIsDialogOpen(false)}
+                >
+                  확인
+                </Button>
               </div>
-            </div>
+            </>
+          ) : (
+            <>
+              <DrawerHeader className="px-5 pt-4 pb-1 text-left sm:text-left">
+                <DrawerTitle className="text-xl font-extrabold tracking-tight">
+                  {shortDate} 설명회 자리 예약
+                </DrawerTitle>
+                <DrawerDescription className="text-[13px] font-medium">
+                  {["1분이면 끝나요", shortTime, placeName].filter(Boolean).join(" · ")}
+                </DrawerDescription>
+              </DrawerHeader>
 
-            {/* Survey Fields from Seminar */}
-            {(() => {
-              const surveyFields: SurveyField[] = (seminar as any).survey_fields || [];
-              if (surveyFields.length === 0) return null;
-              return (
-                <div className="space-y-2">
-                  <SurveyFormRenderer
-                    fields={surveyFields}
-                    onSubmit={() => {}}
-                    renderOnly
-                    formRef={surveyFormRef}
+              <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-4 space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="apply-parent-name" className="block text-[13px] font-bold">
+                    학부모 이름 <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="apply-parent-name"
+                    placeholder="이름"
+                    autoComplete="name"
+                    value={parentName}
+                    onChange={(e) => setParentName(e.target.value)}
+                    maxLength={50}
+                    className="h-11 rounded-xl"
                   />
                 </div>
-              );
-            })()}
 
-            {/* Legacy custom questions fallback */}
-            {seminar.custom_questions && seminar.custom_questions.length > 0 && !((seminar as any).survey_fields?.length > 0) && (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">추가 질문</p>
-                {seminar.custom_questions.map((question, index) => (
-                  <div key={index} className="space-y-1">
-                    <Label className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {question}
-                    </Label>
-                    <Input
-                      placeholder="답변을 입력하세요"
-                      value={customAnswers[question] || ""}
-                      onChange={(e) => setCustomAnswers({
-                        ...customAnswers,
-                        [question]: e.target.value
-                      })}
+                <div className="space-y-1.5">
+                  <Label htmlFor="apply-parent-phone" className="block text-[13px] font-bold">
+                    휴대폰 번호 <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="apply-parent-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    placeholder="010-0000-0000"
+                    value={parentPhone}
+                    onChange={(e) => setParentPhone(formatPhoneNumber(e.target.value))}
+                    maxLength={13}
+                    readOnly={isPhoneAutoFilled}
+                    className="h-11 rounded-xl read-only:bg-muted/60"
+                  />
+                  {isPhoneAutoFilled && (
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">로그인된 계정의 전화번호가 자동 입력되었습니다.</p>
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs text-primary underline underline-offset-2"
+                        onClick={() => setIsPhoneAutoFilled(false)}
+                      >
+                        직접 입력
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="block text-[13px] font-bold">
+                    참석 인원 <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <CountStepper
+                      label="학부모"
+                      value={parentCount}
+                      min={PARENT_COUNT_RANGE.min}
+                      max={PARENT_COUNT_RANGE.max}
+                      onChange={setParentCount}
+                    />
+                    <CountStepper
+                      label="학생"
+                      value={studentCount}
+                      min={STUDENT_COUNT_RANGE.min}
+                      max={STUDENT_COUNT_RANGE.max}
+                      onChange={setStudentCount}
                     />
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="text-[11px] text-muted-foreground">학생과 함께 오시면 학생 +1 · 좌석은 합산</p>
+                </div>
 
-            <Button
-              className="w-full h-12 font-semibold"
-              onClick={handleApply}
-              disabled={submitting}
-            >
-              {submitting ? "신청 중..." : "신청 완료"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Completion Message Dialog */}
-      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
-        <DialogContent className="max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-primary" />
-              신청 완료
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-foreground whitespace-pre-wrap">
-              {completionMessage.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-                part.startsWith('**') && part.endsWith('**')
-                  ? <strong key={i}>{part.slice(2, -2)}</strong>
-                  : part
-              )}
-            </p>
-          </div>
-          <Button className="w-full" onClick={() => setShowCompletionDialog(false)}>
-            확인
-          </Button>
-        </DialogContent>
-      </Dialog>
+                {/* Survey Fields from Seminar */}
+                {(() => {
+                  const surveyFields: SurveyField[] = (seminar as any).survey_fields || [];
+                  if (surveyFields.length === 0) return null;
+                  return (
+                    <SurveyFormRenderer
+                      fields={surveyFields}
+                      onSubmit={() => {}}
+                      renderOnly
+                      formRef={surveyFormRef}
+                    />
+                  );
+                })()}
+
+                {/* Legacy custom questions fallback */}
+                {seminar.custom_questions && seminar.custom_questions.length > 0 && !((seminar as any).survey_fields?.length > 0) && (
+                  <div className="space-y-4">
+                    {seminar.custom_questions.map((question, index) => (
+                      <div key={index} className="space-y-1.5">
+                        <Label className="block text-[13px] font-bold whitespace-pre-wrap">
+                          {question}
+                        </Label>
+                        <Input
+                          placeholder="답변을 입력해 주세요"
+                          value={customAnswers[question] || ""}
+                          onChange={(e) => setCustomAnswers({
+                            ...customAnswers,
+                            [question]: e.target.value
+                          })}
+                          className="h-11 rounded-xl"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  신청하시면 확인 연락을 드려요.
+                </p>
+              </div>
+
+              <div className="border-t border-border px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+                <Button
+                  className="h-14 w-full rounded-2xl text-base font-bold disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100"
+                  onClick={handleApply}
+                  disabled={!canSubmit}
+                >
+                  {submitting ? "예약하는 중..." : "예약 완료하기"}
+                </Button>
+              </div>
+            </>
+          )}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 };

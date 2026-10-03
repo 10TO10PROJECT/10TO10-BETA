@@ -98,7 +98,7 @@ const LearningStyleTest = () => {
 
   if (isAnalyzing) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-app-shell flex flex-col items-center justify-center px-4">
         <div className="text-center space-y-6">
           <div className="relative">
             <div className="w-24 h-24 mx-auto rounded-full gradient-primary flex items-center justify-center animate-pulse">
@@ -129,7 +129,7 @@ const LearningStyleTest = () => {
   const question = questions[currentQuestion];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-app-shell">
       {/* Header */}
       <header className="sticky top-0 bg-card/80 backdrop-blur-lg border-b border-border z-40">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-4">
