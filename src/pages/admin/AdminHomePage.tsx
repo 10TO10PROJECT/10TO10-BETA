@@ -147,7 +147,8 @@ const AdminHomePage = () => {
             const { count: applicationCount } = await supabase
               .from("seminar_applications")
               .select("*", { count: "exact", head: true })
-              .eq("seminar_id", seminar.id);
+              .eq("seminar_id", seminar.id)
+              .neq("status", "rejected");
 
             setUpcomingSeminar({
               daysLeft,
