@@ -150,6 +150,16 @@ const SeminarApplicantsPage = () => {
     return app.custom_answers?._parentPhone || app.profile?.phone || null;
   };
 
+  const getAttendeeBreakdown = (app: Application) => {
+    const parentCount = Number(app.custom_answers?._parentCount);
+    const studentCount = Number(app.custom_answers?._studentCount);
+    if (!Number.isFinite(parentCount) && !Number.isFinite(studentCount)) return null;
+    return {
+      parent: Number.isFinite(parentCount) ? parentCount : 0,
+      student: Number.isFinite(studentCount) ? studentCount : 0,
+    };
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
@@ -231,6 +241,8 @@ const SeminarApplicantsPage = () => {
   const renderDetailContent = (app: Application) => {
     const surveyFields = seminar?.survey_fields || [];
     const customAnswers = app.custom_answers || {};
+    const breakdown = getAttendeeBreakdown(app);
+    const totalAttendees = app.attendee_count ?? (breakdown ? breakdown.parent + breakdown.student : 0);
 
     return (
       <div className="space-y-4">
@@ -240,10 +252,17 @@ const SeminarApplicantsPage = () => {
             <User className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">{app.student_name}</span>
           </div>
-          {(app.attendee_count ?? 0) >= 1 && (
+          {totalAttendees >= 1 && (
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm">신청 인원: {app.attendee_count}명</span>
+              <span className="text-sm">
+                신청 인원: {totalAttendees}명
+                {breakdown && (
+                  <span className="text-muted-foreground">
+                    {" "}(학부모 {breakdown.parent}명 · 학생 {breakdown.student}명)
+                  </span>
+                )}
+              </span>
             </div>
           )}
           {getParentPhone(app) && (
